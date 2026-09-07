@@ -13,19 +13,7 @@ import styles from "./page.module.scss";
 const SUPPORT_USD = 40;
 const STORAGE_KEY = "ai-subscription-calc";
 
-// 자주 쓰는 플랜. 목록에 없으면 '직접 입력'으로 적는다.
-const PLANS = [
-  "Claude Pro",
-  "Claude Max 5x",
-  "Claude Max 20x",
-  "ChatGPT Plus",
-  "ChatGPT Pro",
-  "GitHub Copilot Pro",
-  "Cursor Pro",
-  "Gemini (Google AI Pro)",
-  "Gemini (Google AI Ultra)",
-  "Perplexity Pro",
-];
+// 플랜 목록은 DB에서 받아 온다(src/lib/plans.ts). 목록에 없으면 '직접 입력'.
 const CUSTOM_PLAN = "__custom__";
 
 type Stored = { plan: string; usd: string };
@@ -221,7 +209,7 @@ function CopyRow({
   );
 }
 
-export function Calculator() {
+export function Calculator({ plans }: { plans: string[] }) {
   const { plan, usd } = useStored();
   const [krw, setKrw] = useState("");
   const [copyState, setCopyState] = useState<CopyState>(null);
@@ -249,7 +237,7 @@ export function Calculator() {
   }, [copyState]);
 
   // 저장된 값이 목록에 없으면(예전 자유 입력) 직접 입력 칸을 그대로 보여준다.
-  const custom = manualPlan || (plan !== "" && !PLANS.includes(plan));
+  const custom = manualPlan || (plan !== "" && !plans.includes(plan));
 
   const usdAmount = Number(usd);
   const krwAmount = Number(krw);
@@ -347,7 +335,7 @@ export function Calculator() {
               <option value="" disabled>
                 선택
               </option>
-              {PLANS.map((name) => (
+              {plans.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>

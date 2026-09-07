@@ -20,6 +20,18 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## 플랜 목록 (Supabase)
+
+셀렉트박스의 플랜 목록은 Supabase의 `plans` 테이블에서 읽는다.
+
+1. Supabase 프로젝트를 만들고 SQL Editor에서 `supabase/schema.sql`을 실행한다 (테이블 + 읽기 정책 + 초기 10개 플랜).
+2. `.env.example`을 `.env.local`로 복사하고 Project Settings > API의 URL과 anon(publishable) 키를 채운다.
+3. 이후 플랜 추가·수정·삭제는 Table Editor에서 하면 된다. `sort_order` 오름차순으로 표시되고, 화면에는 최대 5분 뒤 반영된다 (`src/app/page.tsx`의 `revalidate`).
+
+환경변수가 없거나 조회에 실패하면 `src/lib/plans.ts`의 기본 목록으로 동작한다.
+
+`dev`/`build` 스크립트의 `NODE_OPTIONS=--use-system-ca`는 회사 네트워크의 TLS 검사 프록시 때문이다. macOS 키체인의 루트 인증서를 Node가 신뢰하게 해서 Supabase 요청이 `SELF_SIGNED_CERT_IN_CHAIN`으로 실패하지 않게 한다. 프록시가 없는 환경에서는 있어도 무해하다 (Node 22.15+/23.8+).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
