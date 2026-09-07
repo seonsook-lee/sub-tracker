@@ -218,13 +218,17 @@ export function Calculator() {
   const krwAmount = Number(krw);
   const ready = usdAmount > 0 && krwAmount > 0;
   const rate = ready ? krwAmount / usdAmount : null;
-  const rawResult = rate === null ? null : rate * SUPPORT_USD;
+  // 지원은 최대 $40까지. 한도 이하로 결제했다면 청구액 전액이 그대로 지원된다.
+  const overLimit = usdAmount > SUPPORT_USD;
+  const claimedUsd = Math.min(usdAmount, SUPPORT_USD);
+  const rawResult =
+    rate === null ? null : overLimit ? rate * SUPPORT_USD : krwAmount;
   const result = rawResult === null ? null : Math.floor(rawResult);
 
   // 회사 정산 폼의 '사유' 칸에 붙여넣을 문장. 순서: 플랜명, 지원 한도, 환산 결과.
   const reason = [
     plan.trim() || null,
-    `$${SUPPORT_USD}`,
+    `$${formatNumber(String(claimedUsd))}`,
     result !== null ? `₩${formatKrw(result)}` : null,
   ]
     .filter(Boolean)
@@ -331,7 +335,9 @@ export function Calculator() {
       {rate !== null && rawResult !== null && result !== null && (
         <section className={styles.resultSection} aria-live="polite">
           <div className={`${styles.row} ${styles.resultRow}`}>
-            <span className={styles.label}>${SUPPORT_USD} 환산</span>
+            <span className={styles.label}>
+              {overLimit ? `$${SUPPORT_USD} 환산` : "청구액 전액"}
+            </span>
             <span className={styles.resultBlock}>
               <span
                 key={result}
@@ -341,16 +347,24 @@ export function Calculator() {
                 {formatKrw(result)}
               </span>
               <span className={styles.note}>
-                <span className={styles.nowrap}>
-                  ₩{formatKrw(krwAmount)} ÷ ${formatNumber(usd)} × $
-                  {SUPPORT_USD}
-                </span>{" "}
-                <span className={styles.nowrap}>
-                  = ₩
-                  {rawResult.toLocaleString("ko-KR", {
-                    maximumFractionDigits: 2,
-                  })}
-                </span>
+                {overLimit ? (
+                  <>
+                    <span className={styles.nowrap}>
+                      ₩{formatKrw(krwAmount)} ÷ ${formatNumber(usd)} × $
+                      {SUPPORT_USD}
+                    </span>{" "}
+                    <span className={styles.nowrap}>
+                      = ₩
+                      {rawResult.toLocaleString("ko-KR", {
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </>
+                ) : (
+                  <span className={styles.nowrap}>
+                    결제 ${formatNumber(usd)} ≤ 지원 한도 ${SUPPORT_USD}
+                  </span>
+                )}
               </span>
               <span className={styles.rate}>
                 적용 환율{" "}
