@@ -61,6 +61,7 @@
 }
 
 .control {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -91,6 +92,37 @@
       opacity: 0.5;
     }
   }
+
+  select {
+    flex: 1;
+    width: 0;
+    min-width: 0;
+    height: 40px;
+    padding: 0 20px 0 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    color-scheme: dark;
+    font-family: inherit;
+    font-size: 16px;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+}
+
+// 아직 고르지 않은 상태의 '선택' 글자.
+.selectEmpty {
+  color: var(--muted) !important;
+  opacity: 0.5;
+}
+
+.chevron {
+  position: absolute;
+  right: 0;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .prefix {

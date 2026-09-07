@@ -13,6 +13,21 @@ import styles from "./page.module.scss";
 const SUPPORT_USD = 40;
 const STORAGE_KEY = "ai-subscription-calc";
 
+// 자주 쓰는 플랜. 목록에 없으면 '직접 입력'으로 적는다.
+const PLANS = [
+  "Claude Pro",
+  "Claude Max 5x",
+  "Claude Max 20x",
+  "ChatGPT Plus",
+  "ChatGPT Pro",
+  "GitHub Copilot Pro",
+  "Cursor Pro",
+  "Gemini (Google AI Pro)",
+  "Gemini (Google AI Ultra)",
+  "Perplexity Pro",
+];
+const CUSTOM_PLAN = "__custom__";
+
 type Stored = { plan: string; usd: string };
 const EMPTY_STORED: Stored = { plan: "", usd: "" };
 const storedListeners = new Set<() => void>();
@@ -123,6 +138,23 @@ type CopyLabel = "사유" | "금액";
 type CopyStep = "idle" | "next" | "done";
 type CopyState = { label: CopyLabel; ok: boolean } | null;
 
+function ChevronIcon() {
+  return (
+    <svg
+      className={styles.chevron}
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      aria-hidden="true"
+    >
+      <path d="M2.5 4.5L6 8l3.5-3.5" />
+    </svg>
+  );
+}
+
 function CopyIcon({ done }: { done: boolean }) {
   return (
     <svg
@@ -197,7 +229,9 @@ export function Calculator() {
     key: string;
     labels: CopyLabel[];
   }>({ key: "", labels: [] });
-  const planRef = useRef<HTMLInputElement>(null);
+  const [manualPlan, setManualPlan] = useState(false);
+  const planRef = useRef<HTMLSelectElement>(null);
+  const planTextRef = useRef<HTMLInputElement>(null);
   const usdRef = useRef<HTMLInputElement>(null);
   const krwRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLButtonElement>(null);
@@ -213,6 +247,9 @@ export function Calculator() {
     const timer = setTimeout(() => setCopyState(null), 1500);
     return () => clearTimeout(timer);
   }, [copyState]);
+
+  // 저장된 값이 목록에 없으면(예전 자유 입력) 직접 입력 칸을 그대로 보여준다.
+  const custom = manualPlan || (plan !== "" && !PLANS.includes(plan));
 
   const usdAmount = Number(usd);
   const krwAmount = Number(krw);
@@ -287,21 +324,61 @@ export function Calculator() {
         <label className={styles.row}>
           <span className={styles.label}>플랜</span>
           <span className={styles.control}>
-            <input
+            <select
               ref={planRef}
-              type="text"
-              enterKeyHint="next"
-              placeholder="Claude Pro"
-              value={plan}
-              onChange={(e) => writeStored({ plan: e.target.value })}
+              className={custom || plan ? "" : styles.selectEmpty}
+              value={custom ? CUSTOM_PLAN : plan}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === CUSTOM_PLAN) {
+                  setManualPlan(true);
+                  writeStored({ plan: "" });
+                  return;
+                }
+                setManualPlan(false);
+                writeStored({ plan: value });
+              }}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
                 e.preventDefault();
-                usdRef.current?.focus();
+                (custom ? planTextRef : usdRef).current?.focus();
               }}
-            />
+            >
+              <option value="" disabled>
+                선택
+              </option>
+              {PLANS.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              <option value={CUSTOM_PLAN}>직접 입력</option>
+            </select>
+            <ChevronIcon />
           </span>
         </label>
+
+        {custom && (
+          <label className={styles.row}>
+            <span className={styles.label} />
+            <span className={styles.control}>
+              <input
+                ref={planTextRef}
+                type="text"
+                enterKeyHint="next"
+                placeholder="플랜 이름"
+                aria-label="플랜 이름"
+                value={plan}
+                onChange={(e) => writeStored({ plan: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  usdRef.current?.focus();
+                }}
+              />
+            </span>
+          </label>
+        )}
 
         <label className={styles.row}>
           <span className={styles.label}>결제 달러</span>
