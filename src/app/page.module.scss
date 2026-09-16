@@ -58,6 +58,12 @@
   .row {
     min-height: 48px;
   }
+
+  // 환율 근거 줄. 같은 그리드를 쓰되 높이만 줄여 바로 위 입력에 붙인다.
+  .noteRow {
+    min-height: 0;
+    margin-top: -6px;
+  }
 }
 
 .control {
@@ -109,6 +115,64 @@
     outline: none;
     appearance: none;
     cursor: pointer;
+  }
+}
+
+// 추정치 제시. 청구액은 직접 넣는 값이라 미리 채우지 않고 여기서 권한다.
+.suggestion {
+  justify-self: start;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s;
+
+  &:hover {
+    color: var(--text);
+
+    .note {
+      color: var(--text);
+    }
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 1px var(--line-strong);
+    border-radius: 3px;
+  }
+}
+
+// 누를 수 있는 부분. 밑줄로만 표시한다.
+.suggestionValue {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+// 날짜 입력. 달력 아이콘은 셀렉트의 화살표와 같은 자리에 온다.
+.dateInput {
+  color-scheme: dark;
+  cursor: pointer;
+
+  &::-webkit-calendar-picker-indicator {
+    margin: 0;
+    padding: 0;
+    opacity: 0.5;
+    cursor: pointer;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::-webkit-calendar-picker-indicator,
+  &:focus::-webkit-calendar-picker-indicator {
+    opacity: 1;
   }
 }
 

@@ -7,13 +7,16 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { APPROVAL_ERROR, estimateKrw, todayInSeoul } from "@/lib/card";
+import type { RateResult } from "@/lib/exchange-rate";
+import type { Plan } from "@/lib/plans";
 import styles from "./page.module.scss";
 
 // 회사에서 매달 지원해 주는 AI 구독료 한도 (달러).
 const SUPPORT_USD = 40;
 const STORAGE_KEY = "ai-subscription-calc";
 
-// 플랜 목록은 DB에서 받아 온다(src/lib/plans.ts). 목록에 없으면 '직접 입력'.
+// 플랜 목록과 정가는 DB에서 받아 온다(src/lib/plans.ts). 목록에 없으면 '직접 입력'.
 const CUSTOM_PLAN = "__custom__";
 
 type Stored = { plan: string; usd: string };
@@ -52,9 +55,18 @@ function useStored() {
   return useSyncExternalStore(subscribeStored, readStored, () => EMPTY_STORED);
 }
 
+// 2026-09-15 → 9/15
+function formatRateDate(date: string) {
+  const [, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 function formatKrw(amount: number) {
   return Math.floor(amount).toLocaleString("ko-KR");
 }
+
+// 참고값에 남는 오차. 예: "±0.4%"
+const ERROR_LABEL = `±${(APPROVAL_ERROR * 100).toFixed(1)}%`;
 
 const MAX_USD_DIGITS = 6;
 const MAX_KRW_DIGITS = 9;
@@ -209,8 +221,10 @@ function CopyRow({
   );
 }
 
-export function Calculator({ plans }: { plans: string[] }) {
+export function Calculator({ plans }: { plans: Plan[] }) {
   const { plan, usd } = useStored();
+  const [date, setDate] = useState(todayInSeoul);
+  const [fx, setFx] = useState<RateResult | null>(null);
   const [krw, setKrw] = useState("");
   const [copyState, setCopyState] = useState<CopyState>(null);
   const [doneFor, setDoneFor] = useState<{
@@ -221,6 +235,7 @@ export function Calculator({ plans }: { plans: string[] }) {
   const planRef = useRef<HTMLSelectElement>(null);
   const planTextRef = useRef<HTMLInputElement>(null);
   const usdRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
   const krwRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLButtonElement>(null);
   const amountRef = useRef<HTMLButtonElement>(null);
@@ -230,6 +245,23 @@ export function Calculator({ plans }: { plans: string[] }) {
     (saved.plan && saved.usd ? krwRef : planRef).current?.focus();
   }, []);
 
+  // 거래일이 정해지면 그 날 환율을 받아 온다.
+  useEffect(() => {
+    if (!date) return;
+    let cancelled = false;
+    fetch(`/api/rate?date=${date}`)
+      .then((res) => res.json() as Promise<RateResult>)
+      .then((result) => {
+        if (!cancelled) setFx(result);
+      })
+      .catch(() => {
+        if (!cancelled) setFx({ rate: null, reason: "error" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [date]);
+
   useEffect(() => {
     if (!copyState) return;
     const timer = setTimeout(() => setCopyState(null), 1500);
@@ -237,9 +269,13 @@ export function Calculator({ plans }: { plans: string[] }) {
   }, [copyState]);
 
   // 저장된 값이 목록에 없으면(예전 자유 입력) 직접 입력 칸을 그대로 보여준다.
-  const custom = manualPlan || (plan !== "" && !plans.includes(plan));
+  const custom =
+    manualPlan || (plan !== "" && !plans.some((item) => item.name === plan));
 
   const usdAmount = Number(usd);
+  const estimate =
+    fx?.rate && usdAmount > 0 ? estimateKrw(usdAmount, fx.rate.tts) : null;
+
   const krwAmount = Number(krw);
   const ready = usdAmount > 0 && krwAmount > 0;
   const rate = ready ? krwAmount / usdAmount : null;
@@ -306,6 +342,20 @@ export function Calculator({ plans }: { plans: string[] }) {
         ? styles.noteOk
         : "";
 
+  // 청구액은 매출전표를 보고 직접 넣는 값이다. 추정치는 칸이 비었을 때만
+  // 옆에 제시하고, 눌러야 들어간다.
+  const suggestion =
+    fx?.rate && estimate !== null && krw === ""
+      ? { estimate, fx: fx.rate }
+      : null;
+  // 키가 없으면(reason: disabled) 원래부터 직접 입력이니 아무 말도 하지 않는다.
+  const failNote =
+    fx && !fx.rate && fx.reason !== "disabled"
+      ? fx.reason === "none"
+        ? "그날 고시된 환율이 없습니다. 직접 입력해 주세요."
+        : "환율을 가져오지 못했습니다. 직접 입력해 주세요."
+      : null;
+
   return (
     <div className={styles.calc}>
       <section className={styles.inputs}>
@@ -324,20 +374,28 @@ export function Calculator({ plans }: { plans: string[] }) {
                   return;
                 }
                 setManualPlan(false);
-                writeStored({ plan: value });
+                // 정가를 아는 플랜이면 결제 달러를 채워 준다. 다르면 고쳐 쓰면 된다.
+                const price = plans.find(
+                  (item) => item.name === value,
+                )?.priceUsd;
+                writeStored({
+                  plan: value,
+                  ...(price == null ? {} : { usd: String(price) }),
+                });
               }}
               onKeyDown={(e) => {
                 if (e.key !== "Enter") return;
                 e.preventDefault();
-                (custom ? planTextRef : usdRef).current?.focus();
+                const next = custom ? planTextRef : usd ? dateRef : usdRef;
+                next.current?.focus();
               }}
             >
               <option value="" disabled>
                 선택
               </option>
-              {plans.map((name) => (
-                <option key={name} value={name}>
-                  {name}
+              {plans.map((item) => (
+                <option key={item.name} value={item.name}>
+                  {item.name}
                 </option>
               ))}
               <option value={CUSTOM_PLAN}>직접 입력</option>
@@ -374,11 +432,30 @@ export function Calculator({ plans }: { plans: string[] }) {
             prefix="$"
             value={usd}
             onChange={(raw) => writeStored({ usd: raw })}
-            onEnter={() => krwRef.current?.focus()}
+            onEnter={() => dateRef.current?.focus()}
             decimals
             maxDigits={MAX_USD_DIGITS}
             inputRef={usdRef}
           />
+        </label>
+
+        <label className={styles.row}>
+          <span className={styles.label}>거래일</span>
+          <span className={styles.control}>
+            <input
+              ref={dateRef}
+              type="date"
+              className={styles.dateInput}
+              max={todayInSeoul()}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                krwRef.current?.focus();
+              }}
+            />
+          </span>
         </label>
 
         <label className={styles.row}>
@@ -395,6 +472,32 @@ export function Calculator({ plans }: { plans: string[] }) {
             inputRef={krwRef}
           />
         </label>
+
+        {(suggestion || failNote) && (
+          <div className={`${styles.row} ${styles.noteRow}`}>
+            <span className={styles.label} />
+            {suggestion ? (
+              <button
+                type="button"
+                className={styles.suggestion}
+                onClick={() => {
+                  setKrw(String(suggestion.estimate));
+                  krwRef.current?.focus();
+                }}
+              >
+                <span className={styles.suggestionValue}>
+                  추정 ₩{formatKrw(suggestion.estimate)}
+                </span>
+                <span className={styles.note}>
+                  {" · "}
+                  {formatRateDate(suggestion.fx.date)} 환율 기준 {ERROR_LABEL}
+                </span>
+              </button>
+            ) : (
+              <span className={styles.note}>{failNote}</span>
+            )}
+          </div>
+        )}
       </section>
 
       {rate !== null && rawResult !== null && result !== null && (
